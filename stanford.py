@@ -88,30 +88,36 @@ class ConditionalGenerator(nn.Module):
     def __init__(self, latent_dim, condition_dim):
         super(ConditionalGenerator, self).__init__()
 
-        self.init_size = 8  # Начальный размер после первого слоя (например, 8x8)
+        self.init_size = 8  # Начальный размер после fully-connected слоя
         self.fc = nn.Sequential(
-            nn.Linear(latent_dim + condition_dim, 128 * self.init_size ** 2)  # Соединяем шум и условие
+            nn.Linear(latent_dim + condition_dim, 512 * self.init_size ** 2)  # Изменяем количество фильтров на 512
         )
 
         self.conv_blocks = nn.Sequential(
+            nn.BatchNorm2d(512),
+            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 16x16
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 32x32
             nn.BatchNorm2d(128),
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # Увеличение до 16x16
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 64x64
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # Увеличение до 32x32
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 128x128
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # Увеличение до 64x64
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 256x256
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1),  # Увеличение до 128x128
-            nn.Tanh()  # Приведение к диапазону значений [-1, 1]
+            nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1),  # Увеличиваем до 512x512
+            nn.Tanh()  # Приведение к диапазону [-1, 1]
         )
 
     def forward(self, z, condition):
         x = torch.cat([z, condition], dim=1)
         out = self.fc(x)
-        out = out.view(out.size(0), 128, self.init_size, self.init_size)
+        out = out.view(out.size(0), 512, self.init_size, self.init_size)
         img = self.conv_blocks(out)
         return img
 
@@ -121,18 +127,24 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(3 + condition_dim, 32, kernel_size=4, stride=2, padding=1),  # 256x256
+            nn.Conv2d(3 + condition_dim, 32, kernel_size=4, stride=2, padding=1),  # 512x512 -> 256x256
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),  # 128x128
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),  # 256x256 -> 128x128
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),  # 64x64
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),  # 128x128 -> 64x64
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),  # 32x32
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),  # 64x64 -> 32x32
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(256, 1, kernel_size=4, stride=2, padding=1)   # 16x16
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),  # 32x32 -> 16x16
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(512, 1024, kernel_size=4, stride=2, padding=1), # 16x16 -> 8x8
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(1024, 1, kernel_size=4, stride=2, padding=1),  # 8x8 -> 4x4
         )
 
         # Добавляем адаптивное усреднение
