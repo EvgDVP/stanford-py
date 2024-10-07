@@ -110,13 +110,13 @@ class ConditionalGenerator(nn.Module):
 
     def forward(self, z, condition):
         x = torch.cat([z, condition], dim=1)
-        print(f"Размерность после объединения: {x.shape}")
+        #print(f"Размерность после объединения: {x.shape}")
         out = self.fc(x)
-        print(f"Размерность после fully connected: {out.shape}")
+        #print(f"Размерность после fully connected: {out.shape}")
         out = out.view(out.size(0), 128, self.init_size, self.init_size)
-        print(f"Размерность после reshape: {out.shape}")
+        #print(f"Размерность после reshape: {out.shape}")
         img = self.conv_blocks(out)
-        print(f"Размерность изображения: {img.shape}")
+        #print(f"Размерность изображения: {img.shape}")
         return img
 
 class Discriminator(nn.Module):
