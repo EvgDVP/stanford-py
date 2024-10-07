@@ -55,7 +55,7 @@ class PalmDataset(Dataset):
         skin_color = self.labels.iloc[idx, 3].lower()  # цвет кожи
         accessories = self.labels.iloc[idx, 4]  # наличие аксессуаров
 
-        skin_color_mapping = {'very fair': 0,'fair': 1, 'medium': 2, 'dark': 3} #['fair' 'dark' 'medium' 'very fair']
+        skin_color_mapping = {'very fair': 0, 'fair': 1, 'medium': 2, 'dark': 3}  # ['fair' 'dark' 'medium' 'very fair']
         skin_color_label = skin_color_mapping.get(skin_color, -1)
 
         # Преобразование меток в числовой формат (например, one-hot)
@@ -110,14 +110,11 @@ class ConditionalGenerator(nn.Module):
 
     def forward(self, z, condition):
         x = torch.cat([z, condition], dim=1)
-        #print(f"Размерность после объединения: {x.shape}")
         out = self.fc(x)
-        #print(f"Размерность после fully connected: {out.shape}")
         out = out.view(out.size(0), 128, self.init_size, self.init_size)
-        #print(f"Размерность после reshape: {out.shape}")
         img = self.conv_blocks(out)
-        #print(f"Размерность изображения: {img.shape}")
         return img
+
 
 class Discriminator(nn.Module):
     def __init__(self, condition_dim):
@@ -157,9 +154,10 @@ class Discriminator(nn.Module):
 # Параметры GAN
 latent_dim = 100  # Размер шумового вектора
 condition_dim = 3  # Возраст, цвет кожи, аксессуары
-lr_G = 0.0002
-lr_D = 0.0001
+lr_G = 0.0001  # Уменьшение скорости обучения генератора
+lr_D = 0.0004  # Увеличение скорости обучения дискриминатора
 num_epochs = 100
+lambda_gp = 10  # Параметр для градиентного штрафа
 
 # Инициализация модели
 generator = ConditionalGenerator(latent_dim, condition_dim).to(device)
@@ -170,7 +168,19 @@ optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr_G)
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr_D)
 
 # Функция потерь
-adversarial_loss = nn.BCEWithLogitsLoss()
+def gradient_penalty(discriminator, real_imgs, fake_imgs, labels):
+    """Функция градиентного штрафа."""
+    alpha = torch.randn(real_imgs.size(0), 1, 1, 1).to(device)
+    interpolated_imgs = alpha * real_imgs + (1 - alpha) * fake_imgs
+    interpolated_imgs.requires_grad_(True)
+
+    validity = discriminator(interpolated_imgs, labels)
+    gradients = torch.autograd.grad(outputs=validity, inputs=interpolated_imgs,
+                                     grad_outputs=torch.ones(validity.size()).to(device),
+                                     create_graph=True, retain_graph=True)[0]
+
+    gradient_norm = gradients.view(gradients.size(0), -1).norm(2, dim=1)  # L2-норма
+    return ((gradient_norm - 1) ** 2).mean()  # Вернем штраф
 
 # Тренировочный цикл
 for epoch in range(num_epochs):
@@ -185,15 +195,19 @@ for epoch in range(num_epochs):
         labels = labels.to(device)  # Метки: возраст, цвет кожи, аксессуары
 
         # === Тренировка дискриминатора ===
-        for _ in range(2):
+        for _ in range(5):  # Увеличим количество шагов для дискриминатора
             # Генерация шума и фейковых изображений
             z = torch.randn(real_imgs.size(0), latent_dim).to(device)
             gen_imgs = generator(z, labels)
 
             # Рассчитываем потери дискриминатора на реальных и фейковых изображениях
-            real_loss = adversarial_loss(discriminator(real_imgs, labels), valid)
-            fake_loss = adversarial_loss(discriminator(gen_imgs.detach(), labels), fake)
-            d_loss = (real_loss + fake_loss) / 2
+            real_loss = -torch.mean(discriminator(real_imgs, labels))  # WGAN loss
+            fake_loss = torch.mean(discriminator(gen_imgs.detach(), labels))  # WGAN loss
+            d_loss = real_loss + fake_loss
+
+            # Добавляем градиентный штраф
+            gp = gradient_penalty(discriminator, real_imgs.data, gen_imgs.data, labels)
+            d_loss += lambda_gp * gp
 
             # Обновляем дискриминатор
             optimizer_D.zero_grad()
@@ -201,9 +215,7 @@ for epoch in range(num_epochs):
             optimizer_D.step()
 
         # === Тренировка генератора ===
-
-        # Теперь дискриминатор оценивает фейковые изображения как "настоящие"
-        g_loss = adversarial_loss(discriminator(gen_imgs, labels), valid)
+        g_loss = -torch.mean(discriminator(gen_imgs, labels))  # WGAN loss
 
         # Обновляем генератор
         optimizer_G.zero_grad()
