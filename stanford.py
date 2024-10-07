@@ -135,7 +135,7 @@ class Discriminator(nn.Module):
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),  # 8x8
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0),  # 1x1 output (scalar per image)
+            nn.Conv2d(512, 1, kernel_size=8, stride=1, padding=0),  # 1x1 output (scalar per image)
             nn.Sigmoid()  # Вероятность того, что изображение реальное
         )
 
@@ -145,7 +145,7 @@ class Discriminator(nn.Module):
         condition = condition.expand(condition.size(0), condition.size(1), img.size(2), img.size(3))
         x = torch.cat([img, condition], dim=1)  # Условие и изображение вместе
         validity = self.model(x)
-        return validity.view(-1, 1)
+        return validity.view(-1, 1)  # Возвращаем значение для каждого изображения
 
 # Параметры GAN
 latent_dim = 100  # Размер шумового вектора
