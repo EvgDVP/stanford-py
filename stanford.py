@@ -18,6 +18,10 @@ from PIL import Image
 import pandas as pd
 from torchvision import transforms
 
+# Определение устройства (GPU или CPU)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)
+
 class PalmDataset(Dataset):
     def __init__(self, csv_file, zip_file, transform=None):
         self.labels = pd.read_csv(csv_file)
@@ -60,8 +64,11 @@ class PalmDataset(Dataset):
         return img, label
 
 # Путь к CSV файлу с метками и путь к ZIP-файлу с изображениями
-csv_file = '/content/dataset/HandInfo.csv'
-zip_file = '/content/dataset/images/Hands.zip'
+csv_file = 'content/dataset/HandInfo.csv'
+zip_file = 'content/dataset/images/Hands.zip'
+
+df = pd.read_csv(csv_file)
+print(df.columns)
 
 # Определяем преобразования для изображений
 transform = transforms.Compose([
@@ -76,45 +83,70 @@ dataset = PalmDataset(csv_file=csv_file, zip_file=zip_file, transform=transform)
 # Создаем DataLoader
 dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
+
 class ConditionalGenerator(nn.Module):
     def __init__(self, latent_dim, condition_dim):
         super(ConditionalGenerator, self).__init__()
 
-        # Генератор принимает на вход шумовой вектор + вектор признаков
+        self.init_size = 8  # Начальный размер после первого слоя (например, 8x8)
         self.fc = nn.Sequential(
-            nn.Linear(latent_dim + condition_dim, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512 * 512 * 3),
-            nn.Tanh()  # Изображения от -1 до 1
+            nn.Linear(latent_dim + condition_dim, 128 * self.init_size ** 2)  # Соединяем шум и условие
+        )
+
+        self.conv_blocks = nn.Sequential(
+            nn.BatchNorm2d(128),
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),  # Увеличение до 16x16
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),  # Увеличение до 32x32
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # Увеличение до 64x64
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1),  # Увеличение до 128x128
+            nn.Tanh()  # Приведение к диапазону значений [-1, 1]
         )
 
     def forward(self, z, condition):
-        x = torch.cat([z, condition], dim=1)  # Объединение шума и признаков
-        img = self.fc(x)
-        img = img.view(-1, 3, 512, 512)  # Преобразование в изображение
+        x = torch.cat([z, condition], dim=1)
+        print(f"Размерность после объединения: {x.shape}")
+        out = self.fc(x)
+        print(f"Размерность после fully connected: {out.shape}")
+        out = out.view(out.size(0), 128, self.init_size, self.init_size)
+        print(f"Размерность после reshape: {out.shape}")
+        img = self.conv_blocks(out)
+        print(f"Размерность изображения: {img.shape}")
         return img
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, condition_dim):
         super(Discriminator, self).__init__()
+
         self.model = nn.Sequential(
-            nn.Linear(512 * 512 * 3, 1024),
-            nn.LeakyReLU(0.2),
-            nn.Linear(1024, 512),
-            nn.LeakyReLU(0.2),
-            nn.Linear(512, 1),
-            nn.Sigmoid()  # Выходное значение - вероятность того, что изображение реальное
+            nn.Conv2d(3 + condition_dim, 16, kernel_size=4, stride=2, padding=1),  # Уменьшение до 64x64
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1),  # Уменьшение до 32x32
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),  # Уменьшение до 16x16
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),  # Уменьшение до 8x8
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0),  # Окончательный вывод
+            nn.Sigmoid()
         )
 
-    def forward(self, img):
-        img_flat = img.view(img.size(0), -1)  # Преобразование в одномерный вектор
-        validity = self.model(img_flat)
-        return validity
-
-# Определение устройства (GPU или CPU)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def forward(self, img, condition):
+        # Конкатенируем изображение и условие по канальному измерению
+        condition = condition.unsqueeze(2).unsqueeze(3)  # Изменяем размерность условия для конкатенации
+        print(f"Размерность условия для конкатенации: {condition}")
+        condition = condition.expand(condition.size(0), condition.size(1), img.size(2), img.size(3))
+        x = torch.cat([img, condition], dim=1)  # Условие и изображение вместе
+        validity = self.model(x)
+        return validity.view(-1, 1)
 
 # Параметры GAN
 latent_dim = 100  # Размер шумового вектора
@@ -124,14 +156,14 @@ num_epochs = 100
 
 # Инициализация модели
 generator = ConditionalGenerator(latent_dim, condition_dim).to(device)
-discriminator = Discriminator().to(device)
+discriminator = Discriminator(condition_dim).to(device)
 
 # Оптимизаторы
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
 
 # Функция потерь
-adversarial_loss = nn.BCELoss()
+adversarial_loss = nn.BCEWithLogitsLoss()
 
 # Тренировочный цикл
 for epoch in range(num_epochs):
