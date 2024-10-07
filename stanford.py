@@ -202,7 +202,7 @@ for epoch in range(num_epochs):
         # === Тренировка генератора ===
 
         # Теперь дискриминатор оценивает фейковые изображения как "настоящие"
-        g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+        g_loss = adversarial_loss(discriminator(gen_imgs, labels), valid)
 
         # Обновляем генератор
         optimizer_G.zero_grad()
