@@ -135,17 +135,24 @@ class Discriminator(nn.Module):
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),  # 32x32
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(512, 1, kernel_size=4, stride=2, padding=1),  # 16x16
-            nn.Sigmoid()  # Вероятность того, что изображение реальное
+            nn.Conv2d(512, 1, kernel_size=4, stride=2, padding=1)   # 16x16
         )
+
+        # Добавляем адаптивное усреднение
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))  # Преобразование до 1x1
 
     def forward(self, img, condition):
         # Конкатенируем изображение и условие по канальному измерению
         condition = condition.unsqueeze(2).unsqueeze(3)  # Изменяем размерность условия для конкатенации
         condition = condition.expand(condition.size(0), condition.size(1), img.size(2), img.size(3))
-        x = torch.cat([img, condition], dim=1)  # Условие и изображение вместе
-        validity = self.model(x)
-        return validity.view(-1, 1)  # Возвращаем значение для каждого изображения
+        x = torch.cat([img, condition], dim=1)  # Объединяем условие и изображение
+
+        validity = self.model(x)  # Получаем выход из свертки
+        validity = self.adaptive_pool(validity)  # Применяем адаптивное усреднение
+        validity = validity.view(-1, 1)  # Преобразуем в размерность [batch_size, 1]
+
+        return validity
+
 
 # Параметры GAN
 latent_dim = 100  # Размер шумового вектора
