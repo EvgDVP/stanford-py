@@ -171,6 +171,9 @@ optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr_D)
 def gradient_penalty(discriminator, real_imgs, fake_imgs, labels):
     """Функция градиентного штрафа."""
     alpha = torch.randn(real_imgs.size(0), 1, 1, 1).to(device)
+
+    fake_imgs = nn.functional.interpolate(fake_imgs, size=real_imgs.shape[2:])
+
     interpolated_imgs = alpha * real_imgs + (1 - alpha) * fake_imgs
     interpolated_imgs.requires_grad_(True)
 
