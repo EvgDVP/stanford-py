@@ -124,25 +124,24 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.model = nn.Sequential(
-            nn.Conv2d(3 + condition_dim, 16, kernel_size=4, stride=2, padding=1),  # Уменьшение до 64x64
+            nn.Conv2d(3 + condition_dim, 64, kernel_size=4, stride=2, padding=1),  # 64x64
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1),  # Уменьшение до 32x32
-            nn.BatchNorm2d(32),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1),  # Уменьшение до 16x16
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),  # Уменьшение до 8x8
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),  # 32x32
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 1, kernel_size=4, stride=1, padding=0),  # Окончательный вывод
-            nn.Sigmoid()
+            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),  # 16x16
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),  # 8x8
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(512, 1, kernel_size=4, stride=1, padding=0),  # 1x1 output (scalar per image)
+            nn.Sigmoid()  # Вероятность того, что изображение реальное
         )
 
     def forward(self, img, condition):
         # Конкатенируем изображение и условие по канальному измерению
         condition = condition.unsqueeze(2).unsqueeze(3)  # Изменяем размерность условия для конкатенации
-        print(f"Размерность условия для конкатенации: {condition}")
         condition = condition.expand(condition.size(0), condition.size(1), img.size(2), img.size(3))
         x = torch.cat([img, condition], dim=1)  # Условие и изображение вместе
         validity = self.model(x)
@@ -184,8 +183,8 @@ for epoch in range(num_epochs):
         gen_imgs = generator(z, labels)
 
         # Рассчитываем потери дискриминатора на реальных и фейковых изображениях
-        real_loss = adversarial_loss(discriminator(real_imgs), valid)
-        fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
+        real_loss = adversarial_loss(discriminator(real_imgs, labels), valid)
+        fake_loss = adversarial_loss(discriminator(gen_imgs.detach(), labels), fake)
         d_loss = (real_loss + fake_loss) / 2
 
         # Обновляем дискриминатор
