@@ -157,7 +157,8 @@ class Discriminator(nn.Module):
 # Параметры GAN
 latent_dim = 100  # Размер шумового вектора
 condition_dim = 3  # Возраст, цвет кожи, аксессуары
-lr = 0.0002
+lr_G = 0.0002
+lr_D = 0.0001
 num_epochs = 100
 
 # Инициализация модели
@@ -165,8 +166,8 @@ generator = ConditionalGenerator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
 # Оптимизаторы
-optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr)
-optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr)
+optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr_G)
+optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr_D)
 
 # Функция потерь
 adversarial_loss = nn.BCEWithLogitsLoss()
@@ -184,20 +185,20 @@ for epoch in range(num_epochs):
         labels = labels.to(device)  # Метки: возраст, цвет кожи, аксессуары
 
         # === Тренировка дискриминатора ===
+        for _ in range(2):
+            # Генерация шума и фейковых изображений
+            z = torch.randn(real_imgs.size(0), latent_dim).to(device)
+            gen_imgs = generator(z, labels)
 
-        # Генерация шума и фейковых изображений
-        z = torch.randn(real_imgs.size(0), latent_dim).to(device)
-        gen_imgs = generator(z, labels)
+            # Рассчитываем потери дискриминатора на реальных и фейковых изображениях
+            real_loss = adversarial_loss(discriminator(real_imgs, labels), valid)
+            fake_loss = adversarial_loss(discriminator(gen_imgs.detach(), labels), fake)
+            d_loss = (real_loss + fake_loss) / 2
 
-        # Рассчитываем потери дискриминатора на реальных и фейковых изображениях
-        real_loss = adversarial_loss(discriminator(real_imgs, labels), valid)
-        fake_loss = adversarial_loss(discriminator(gen_imgs.detach(), labels), fake)
-        d_loss = (real_loss + fake_loss) / 2
-
-        # Обновляем дискриминатор
-        optimizer_D.zero_grad()
-        d_loss.backward()
-        optimizer_D.step()
+            # Обновляем дискриминатор
+            optimizer_D.zero_grad()
+            d_loss.backward()
+            optimizer_D.step()
 
         # === Тренировка генератора ===
 
