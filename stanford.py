@@ -184,7 +184,7 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
         inputs=interpolates,
         grad_outputs=fake,
         create_graph=True,
-        retain_graph=True,  # <--- добавлено
+        retain_graph=True,
         only_inputs=True,
     )[0]
 
@@ -233,7 +233,7 @@ for epoch in range(num_epochs):
             gradient_penalty = compute_gradient_penalty(discriminator, real_images, fake_images, conditions)
 
             d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
-            d_loss.backward()
+            d_loss.backward()  # Потеря для дискриминатора
             optimizer_D.step()
 
             # Объектная функция WGAN
@@ -243,9 +243,11 @@ for epoch in range(num_epochs):
         # Обучение генератора
         optimizer_G.zero_grad()
 
+        # Переопределение для генератора
+        fake_images = generator(z, conditions)
         fake_validity = discriminator(fake_images, conditions)
-        g_loss = -torch.mean(fake_validity)
-        g_loss.backward(retain_graph=True)  # Добавлено для удержания графа
+        g_loss = -torch.mean(fake_validity)  # Потеря для генератора
+        g_loss.backward()
         optimizer_G.step()
 
     print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
@@ -265,5 +267,6 @@ for epoch in range(num_epochs):
             for j in range(generated_images.size(0)):
                 img = transforms.ToPILImage()(generated_images[j])  # Преобразуем тензор в изображение
                 img.save(f'generated_images/image_epoch_{epoch + 1}_img_{j + 1}.png')  # Сохраняем изображение
+
 
 print("Обучение завершено!")
