@@ -13,6 +13,7 @@ from torchvision import transforms
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
+
 class PalmDataset(Dataset):
     def __init__(self, csv_file, zip_file, transform=None):
         self.labels = pd.read_csv(csv_file)
@@ -54,6 +55,7 @@ class PalmDataset(Dataset):
 
         return img, label
 
+
 # Путь к CSV файлу с метками и путь к ZIP-файлу с изображениями
 csv_file = 'content/dataset/HandInfo.csv'
 zip_file = 'content/dataset/images/Hands.zip'
@@ -73,6 +75,7 @@ dataset = PalmDataset(csv_file=csv_file, zip_file=zip_file, transform=transform)
 
 # Создаем DataLoader
 dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+
 
 class Generator(nn.Module):
     def __init__(self, latent_dim, condition_dim):
@@ -122,6 +125,7 @@ class Generator(nn.Module):
         img = self.conv_blocks(out)
         return img
 
+
 class Discriminator(nn.Module):
     def __init__(self, condition_dim):
         super(Discriminator, self).__init__()
@@ -150,29 +154,22 @@ class Discriminator(nn.Module):
             nn.Conv2d(128, 256, 4, 2, 1),  # 16x16 -> 8x8
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(256, 512, 4, 2, 1)  # 8x8 -> 4x4
         )
 
-        # Полносвязный слой для объединения признаков изображения с условием
-        self.fc_layer = nn.Sequential(
-            nn.Linear(512 * 4 * 4 + condition_dim, 1)  # Увеличиваем входную размерность на condition_dim
+        self.fc = nn.Sequential(
+            nn.Linear(256 * 8 * 8 + condition_dim, 1),  # 8x8 -> 1
         )
 
     def forward(self, img, condition):
-        # Пропускаем изображение через сверточные блоки
-        out = self.conv_blocks(img)
+        # Обработка изображения через свёрточные слои
+        img_features = self.conv_blocks(img)
+        img_features = img_features.view(img_features.size(0), -1)  # Сглаживание
 
-        # Разворачиваем тензор в вектор перед подачей на полносвязный слой
-        out = out.view(out.size(0), -1)  # Размер: (batch_size, 512 * 4 * 4)
-
-        # Конкатенируем признаки изображения с условием (например, возраст, цвет кожи, аксессуары)
-        out = torch.cat([out, condition], dim=1)  # Объединяем с условием
-
-        # Пропускаем через полносвязный слой для классификации
-        validity = self.fc_layer(out)
-
+        # Конкатенация с условием
+        out = torch.cat([img_features, condition], dim=1)
+        validity = self.fc(out)
         return validity
+
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
     alpha = torch.randn(real_samples.size(0), 1, 1, 1).to(real_samples.device)
@@ -181,17 +178,19 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     d_interpolates = discriminator(interpolates, conditions)
     fake = torch.ones(real_samples.shape[0], 1).to(real_samples.device)  # Признак для реальных изображений
 
+    # Указываем retain_graph=True для возможности обратного распространения
     gradients = torch.autograd.grad(
         outputs=d_interpolates,
         inputs=interpolates,
         grad_outputs=fake,
         create_graph=True,
-        retain_graph=True,
+        retain_graph=True,  # <--- добавлено
         only_inputs=True,
     )[0]
 
     gradient_penalty = ((gradients.view(gradients.size(0), -1).norm(2, dim=1) - 1) ** 2).mean()  # L2-норма
     return gradient_penalty
+
 
 # Установка параметров для обучения
 latent_dim = 100  # Размер латентного пространства
@@ -208,6 +207,9 @@ discriminator = Discriminator(condition_dim).to(device)
 # Оптимизаторы
 optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
+
+# Папка для сохранения изображений
+os.makedirs('generated_images', exist_ok=True)
 
 # Обучение
 for epoch in range(num_epochs):
@@ -243,7 +245,7 @@ for epoch in range(num_epochs):
 
         fake_validity = discriminator(fake_images, conditions)
         g_loss = -torch.mean(fake_validity)
-        g_loss.backward()
+        g_loss.backward(retain_graph=True)  # Добавлено для удержания графа
         optimizer_G.step()
 
     print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
@@ -252,5 +254,16 @@ for epoch in range(num_epochs):
     if (epoch + 1) % 10 == 0:
         torch.save(generator.state_dict(), f'generator_epoch_{epoch + 1}.pth')
         torch.save(discriminator.state_dict(), f'discriminator_epoch_{epoch + 1}.pth')
+
+        # Сохранение сгенерированных изображений
+        with torch.no_grad():
+            z = torch.randn(16, latent_dim).to(device)  # Генерируем 16 случайных латентных векторов
+            sample_conditions = conditions[:16]  # Берем условия из батча
+            generated_images = generator(z, sample_conditions)  # Генерируем изображения
+            generated_images = (generated_images + 1) / 2  # Приводим значения к диапазону [0, 1]
+
+            for j in range(generated_images.size(0)):
+                img = transforms.ToPILImage()(generated_images[j])  # Преобразуем тензор в изображение
+                img.save(f'generated_images/image_epoch_{epoch + 1}_img_{j + 1}.png')  # Сохраняем изображение
 
 print("Обучение завершено!")
