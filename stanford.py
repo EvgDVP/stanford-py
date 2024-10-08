@@ -219,7 +219,11 @@ class Discriminator(nn.Module):
         return validity
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
-    alpha = torch.randn(real_samples.size(0), 1, 1, 1, device=real_samples.device)
+    print("Размер реальных изображений:", real_samples.shape)  # добавьте это
+    print("Размер фейковых изображений:", fake_samples.shape)  # добавьте это
+
+    batch_size = real_samples.shape[0]
+    alpha = torch.rand(batch_size, 1, 1, 1).expand_as(real_samples).to(real_samples.device)
     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
 
     d_interpolates = discriminator(interpolates, conditions)
