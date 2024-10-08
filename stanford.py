@@ -164,7 +164,6 @@ class Discriminator(nn.Module):
     def __init__(self, condition_dim):
         super(Discriminator, self).__init__()
 
-        # Здесь изменяем количество входных каналов, добавляем + condition_dim каналов
         self.conv_blocks = nn.Sequential(
             nn.Conv2d(3 + condition_dim, 8, 4, 2, 1),  # 512x512 -> 256x256
             nn.LeakyReLU(0.2, inplace=True),
@@ -190,8 +189,9 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
         )
 
+        # Исправляем размер входа для полносвязного слоя
         self.fc = nn.Sequential(
-            nn.Linear(256 * 8 * 8, 1),  # Финальный полносвязный слой для оценки валидности
+            nn.Linear(256 * 8 * 8, 1),  # 256 каналов и 8x8 изображение
         )
 
     def forward(self, img, condition):
@@ -208,6 +208,7 @@ class Discriminator(nn.Module):
         # Пропускаем через финальный полносвязный слой
         validity = self.fc(img_features)
         return validity
+
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
     alpha = torch.randn(real_samples.size(0), 1, 1, 1, device=real_samples.device)
