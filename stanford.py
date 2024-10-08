@@ -43,7 +43,7 @@ class PalmDataset(Dataset):
             img = self.transform(img)
 
         # Получаем метки
-        age = self.labels.iloc[idx, 1]  # возраст
+        age = self.labels.iloc[idx, 1] / 100  # возраст
         skin_color = self.labels.iloc[idx, 3].lower()  # цвет кожи
         accessories = self.labels.iloc[idx, 4]  # наличие аксессуаров
 
@@ -82,34 +82,69 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
 
         self.init_size = 4  # Начальный размер изображения 4x4
-        self.l1 = nn.Sequential(nn.Linear(latent_dim + condition_dim, 512 * self.init_size * self.init_size))
+        self.l1 = nn.Sequential(
+            nn.Linear(latent_dim + condition_dim, 1024 * self.init_size * self.init_size)
+        )
 
         self.conv_blocks = nn.Sequential(
-            nn.ConvTranspose2d(512, 256, 4, 2, 1),  # 4x4 -> 8x8
+            # 4x4 -> 8x8
+            nn.ConvTranspose2d(1024, 1024, 4, 2, 1),  # Увеличиваем разрешение
+            nn.BatchNorm2d(1024),
+            nn.ReLU(True),
+            nn.Conv2d(1024, 1024, 3, padding=1),  # Дополнительная свёртка
+            nn.BatchNorm2d(1024),
+            nn.ReLU(True),
+
+            # 8x8 -> 16x16
+            nn.ConvTranspose2d(1024, 512, 4, 2, 1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(True),
+            nn.Conv2d(512, 512, 3, padding=1),  # Дополнительная свёртка
+            nn.BatchNorm2d(512),
+            nn.ReLU(True),
+
+            # 16x16 -> 32x32
+            nn.ConvTranspose2d(512, 256, 4, 2, 1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(True),
+            nn.Conv2d(256, 256, 3, padding=1),  # Дополнительная свёртка
             nn.BatchNorm2d(256),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(256, 128, 4, 2, 1),  # 8x8 -> 16x16
+            # 32x32 -> 64x64
+            nn.ConvTranspose2d(256, 128, 4, 2, 1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(True),
+            nn.Conv2d(128, 128, 3, padding=1),  # Дополнительная свёртка
             nn.BatchNorm2d(128),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(128, 64, 4, 2, 1),  # 16x16 -> 32x32
+            # 64x64 -> 128x128
+            nn.ConvTranspose2d(128, 64, 4, 2, 1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(True),
+            nn.Conv2d(64, 64, 3, padding=1),  # Дополнительная свёртка
             nn.BatchNorm2d(64),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(64, 32, 4, 2, 1),  # 32x32 -> 64x64
+            # 128x128 -> 256x256
+            nn.ConvTranspose2d(64, 32, 4, 2, 1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(True),
+            nn.Conv2d(32, 32, 3, padding=1),  # Дополнительная свёртка
             nn.BatchNorm2d(32),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(32, 16, 4, 2, 1),  # 64x64 -> 128x128
+            # 256x256 -> 512x512
+            nn.ConvTranspose2d(32, 16, 4, 2, 1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(True),
+            nn.Conv2d(16, 16, 3, padding=1),  # Дополнительная свёртка
             nn.BatchNorm2d(16),
             nn.ReLU(True),
 
-            nn.ConvTranspose2d(16, 8, 4, 2, 1),  # 128x128 -> 256x256
-            nn.BatchNorm2d(8),
-            nn.ReLU(True),
-
-            nn.ConvTranspose2d(8, 3, 4, 2, 1),  # 256x256 -> 512x512
+            # Последний слой: 512x512
+            nn.ConvTranspose2d(16, 3, 4, 2, 1),
             nn.Tanh()  # Для нормализации значений пикселей в диапазоне от -1 до 1
         )
 
@@ -119,20 +154,19 @@ class Generator(nn.Module):
 
         # Преобразуем через полносвязный слой в начальный тензор
         out = self.l1(x)
-        out = out.view(out.size(0), 512, self.init_size, self.init_size)  # Превращаем в тензор 4x4
+        out = out.view(out.size(0), 1024, self.init_size, self.init_size)  # Превращаем в тензор 4x4
 
         # Пропускаем через транспонированные свёртки для увеличения разрешения
         img = self.conv_blocks(out)
         return img
 
-
 class Discriminator(nn.Module):
     def __init__(self, condition_dim):
         super(Discriminator, self).__init__()
 
-        # Сверточные блоки для обработки изображения
+        # Здесь изменяем количество входных каналов, добавляем + condition_dim каналов
         self.conv_blocks = nn.Sequential(
-            nn.Conv2d(3, 8, 4, 2, 1),  # 512x512 -> 256x256
+            nn.Conv2d(3 + condition_dim, 8, 4, 2, 1),  # 512x512 -> 256x256
             nn.LeakyReLU(0.2, inplace=True),
 
             nn.Conv2d(8, 16, 4, 2, 1),  # 256x256 -> 128x128
@@ -157,22 +191,26 @@ class Discriminator(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(256 * 8 * 8 + condition_dim, 1),  # 8x8 -> 1
+            nn.Linear(256 * 8 * 8, 1),  # Финальный полносвязный слой для оценки валидности
         )
 
     def forward(self, img, condition):
+        # Изменяем размер условия для совпадения с размером изображения
+        condition_expanded = condition.view(condition.size(0), condition.size(1), 1, 1).expand(-1, -1, img.size(2), img.size(3))
+
+        # Конкатенируем условие как дополнительный канал к изображению
+        img_input = torch.cat([img, condition_expanded], dim=1)
+
         # Обработка изображения через свёрточные слои
-        img_features = self.conv_blocks(img)
+        img_features = self.conv_blocks(img_input)
         img_features = img_features.view(img_features.size(0), -1)  # Сглаживание
 
-        # Конкатенация с условием
-        out = torch.cat([img_features, condition], dim=1)
-        validity = self.fc(out)
+        # Пропускаем через финальный полносвязный слой
+        validity = self.fc(img_features)
         return validity
 
-
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
-    alpha = torch.randn(real_samples.size(0), 1, 1, 1).to(real_samples.device)
+    alpha = torch.randn(real_samples.size(0), 1, 1, 1, device=real_samples.device)
     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
 
     d_interpolates = discriminator(interpolates, conditions)
@@ -193,10 +231,10 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 
 
 # Установка параметров для обучения
-latent_dim = 100  # Размер латентного пространства
+latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 100
-n_critic = 5  # Количество шагов для дискриминатора перед обновлением генератора
+n_critic = 3  # Количество шагов для дискриминатора перед обновлением генератора
 lr = 0.0001  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
 
@@ -210,6 +248,12 @@ optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
 # Папка для сохранения изображений
 os.makedirs('generated_images', exist_ok=True)
+
+
+# Функция для label smoothing (применяется только к реальным меткам)
+def smooth_labels(labels, smoothing=0.1):
+    return labels - smoothing
+
 
 # Обучение
 for epoch in range(num_epochs):
@@ -227,18 +271,20 @@ for epoch in range(num_epochs):
             # Генерация фейковых изображений
             fake_images = generator(z, conditions)
 
-            # Потеря для дискриминатора
+            # Валидность для дискриминатора
             real_validity = discriminator(real_images, conditions)
             fake_validity = discriminator(fake_images.detach(), conditions)
+
+            # Применяем label smoothing к реальной валидности
+            real_validity_smoothed = smooth_labels(real_validity, smoothing=0.1)
+
+            # Расчет градиентной штрафной функции
             gradient_penalty = compute_gradient_penalty(discriminator, real_images, fake_images, conditions)
 
-            d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + 10 * gradient_penalty
+            # Потеря для дискриминатора с учетом label smoothing
+            d_loss = -torch.mean(real_validity_smoothed) + torch.mean(fake_validity) + 10 * gradient_penalty
             d_loss.backward()  # Потеря для дискриминатора
             optimizer_D.step()
-
-            # Объектная функция WGAN
-            for p in discriminator.parameters():
-                p.data.clamp_(-weight_clip, weight_clip)
 
         # Обучение генератора
         optimizer_G.zero_grad()
@@ -267,6 +313,5 @@ for epoch in range(num_epochs):
             for j in range(generated_images.size(0)):
                 img = transforms.ToPILImage()(generated_images[j])  # Преобразуем тензор в изображение
                 img.save(f'generated_images/image_epoch_{epoch + 1}_img_{j + 1}.png')  # Сохраняем изображение
-
 
 print("Обучение завершено!")
