@@ -160,6 +160,7 @@ class Generator(nn.Module):
         img = self.conv_blocks(out)
         return img
 
+
 class Discriminator(nn.Module):
     def __init__(self, condition_dim):
         super(Discriminator, self).__init__()
@@ -168,34 +169,36 @@ class Discriminator(nn.Module):
             nn.Conv2d(3 + condition_dim, 8, 4, 2, 1),  # Учитываем дополнительные каналы условий
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(8, 16, 4, 2, 1),  # 256x256 -> 128x128
+            nn.Conv2d(8, 16, 4, 2, 1),  # 512x512 -> 256x256
             nn.BatchNorm2d(16),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(16, 32, 4, 2, 1),  # 128x128 -> 64x64
+            nn.Conv2d(16, 32, 4, 2, 1),  # 256x256 -> 128x128
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(32, 64, 4, 2, 1),  # 64x64 -> 32x32
+            nn.Conv2d(32, 64, 4, 2, 1),  # 128x128 -> 64x64
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, 4, 2, 1),  # 32x32 -> 16x16
+            nn.Conv2d(64, 128, 4, 2, 1),  # 64x64 -> 32x32
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(128, 256, 4, 2, 1),  # 16x16 -> 8x8
+            nn.Conv2d(128, 256, 4, 2, 1),  # 32x32 -> 16x16
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(256, 512, 4, 2, 1),  # 8x8 -> 4x4
+            nn.Conv2d(256, 512, 4, 2, 1),  # 16x16 -> 8x8
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
-        # Исправляем размер входа для полносвязного слоя
+        # Корректировка размера входа для полносвязного слоя
+        # Ожидаемая форма выхода после свёрточных слоёв
+        self.fc_input_size = 512 * 8 * 8  # 512 каналов и 8x8 изображение
         self.fc = nn.Sequential(
-            nn.Linear(512 * 4 * 4, 1),  # 512 каналов и 4x4 изображение
+            nn.Linear(self.fc_input_size, 1),  # 512 * 8 * 8 (передаём нужный размер)
         )
 
     def forward(self, img, condition):
