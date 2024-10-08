@@ -194,11 +194,10 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
         )
 
-        # Корректировка размера входа для полносвязного слоя
-        # Ожидаемая форма выхода после свёрточных слоёв
-        self.fc_input_size = 512 * 8 * 8  # 512 каналов и 8x8 изображение
+        # Используем AdaptiveAvgPool для получения фиксированного размера выхода
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))  # Выход будет 512x1x1
         self.fc = nn.Sequential(
-            nn.Linear(self.fc_input_size, 1),  # 512 * 8 * 8 (передаём нужный размер)
+            nn.Linear(512, 1),  # Измените здесь на 512
         )
 
     def forward(self, img, condition):
@@ -210,12 +209,14 @@ class Discriminator(nn.Module):
 
         # Обработка изображения через свёрточные слои
         img_features = self.conv_blocks(img_input)
-        img_features = img_features.view(img_features.size(0), -1)  # Сглаживание
+
+        # Применяем адаптивное среднее значение для получения фиксированного размера
+        img_features = self.pool(img_features)  # Получаем размер 512x1x1
+        img_features = img_features.view(img_features.size(0), -1)  # Сглаживаем в 512
 
         # Пропускаем через финальный полносвязный слой
         validity = self.fc(img_features)
         return validity
-
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
     alpha = torch.randn(real_samples.size(0), 1, 1, 1, device=real_samples.device)
