@@ -4,7 +4,7 @@ from io import BytesIO
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 import pandas as pd
@@ -12,7 +12,7 @@ from torchvision import transforms
 
 # Определение устройства (GPU или CPU)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(device)
+print(f"Используемое устройство: {device}")
 
 
 class PalmDataset(Dataset):
@@ -51,7 +51,7 @@ class PalmDataset(Dataset):
         skin_color_mapping = {'very fair': 0, 'fair': 1, 'medium': 2, 'dark': 3}  # Маппинг цвета кожи
         skin_color_label = skin_color_mapping.get(skin_color, -1)
 
-        # Преобразование меток в числовой формат (например, one-hot)
+        # Преобразование меток в числовой формат
         label = torch.tensor([age, skin_color_label, accessories], dtype=torch.float32)
 
         return img, label
@@ -62,7 +62,7 @@ csv_file = 'content/dataset/HandInfo.csv'
 zip_file = 'content/dataset/images/Hands.zip'
 
 df = pd.read_csv(csv_file)
-print(df.columns)
+print(f"Столбцы CSV файла: {df.columns}")
 
 # Определяем преобразования для изображений
 transform = transforms.Compose([
@@ -89,7 +89,7 @@ class Generator(nn.Module):
 
         self.conv_blocks = nn.Sequential(
             # 4x4 -> 8x8
-            nn.ConvTranspose2d(1024, 512, 4, 2, 1),  # Увеличиваем разрешение
+            nn.ConvTranspose2d(1024, 512, 4, 2, 1),
             nn.BatchNorm2d(512),
             nn.ReLU(True),
 
@@ -119,7 +119,7 @@ class Generator(nn.Module):
             nn.ReLU(True),
 
             # 256x256 -> 512x512
-            nn.ConvTranspose2d(16, 3, 4, 2, 1),  # Теперь здесь будет выход 512x512
+            nn.ConvTranspose2d(16, 3, 4, 2, 1),
             nn.Tanh()  # Для нормализации значений пикселей в диапазоне от -1 до 1
         )
 
@@ -141,30 +141,30 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         self.conv_blocks = nn.Sequential(
-            nn.Conv2d(3 + condition_dim, 8, 4, 2, 1),  # Учитываем дополнительные каналы условий
+            nn.Conv2d(3 + condition_dim, 8, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(8, 16, 4, 2, 1),  # 512x512 -> 256x256
+            nn.Conv2d(8, 16, 4, 2, 1),
             nn.BatchNorm2d(16),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(16, 32, 4, 2, 1),  # 256x256 -> 128x128
+            nn.Conv2d(16, 32, 4, 2, 1),
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(32, 64, 4, 2, 1),  # 128x128 -> 64x64
+            nn.Conv2d(32, 64, 4, 2, 1),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, 4, 2, 1),  # 64x64 -> 32x32
+            nn.Conv2d(64, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(128, 256, 4, 2, 1),  # 32x32 -> 16x16
+            nn.Conv2d(128, 256, 4, 2, 1),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(256, 512, 4, 2, 1),  # 16x16 -> 8x8
+            nn.Conv2d(256, 512, 4, 2, 1),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
         )
@@ -172,12 +172,13 @@ class Discriminator(nn.Module):
         # Используем AdaptiveAvgPool для получения фиксированного размера выхода
         self.pool = nn.AdaptiveAvgPool2d((1, 1))  # Выход будет 512x1x1
         self.fc = nn.Sequential(
-            nn.Linear(512, 1),  # Измените здесь на 512
+            nn.Linear(512, 1),
         )
 
     def forward(self, img, condition):
         # Изменяем размер условия для совпадения с размером изображения
-        condition_expanded = condition.view(condition.size(0), condition.size(1), 1, 1).expand(-1, -1, img.size(2), img.size(3))
+        condition_expanded = condition.view(condition.size(0), condition.size(1), 1, 1).expand(-1, -1, img.size(2),
+                                                                                               img.size(3))
 
         # Конкатенируем условие как дополнительный канал к изображению
         img_input = torch.cat([img, condition_expanded], dim=1)
@@ -189,9 +190,11 @@ class Discriminator(nn.Module):
         img_features = self.pool(img_features)  # Получаем размер 512x1x1
         img_features = img_features.view(img_features.size(0), -1)  # Сглаживаем в 512
 
-        # Пропускаем через финальный полносвязный слой
+        # Пропускаем через полносвязный слой для получения оценки реальности изображения
         validity = self.fc(img_features)
+
         return validity
+
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
     batch_size = real_samples.shape[0]
@@ -218,26 +221,29 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 # Установка параметров для обучения
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
-num_epochs = 100
-start_epochs = 10
-n_critic = 4  # Количество шагов для дискриминатора перед обновлением генератора
-lr = 0.0001  # Начальная скорость обучения
+num_epochs = 200
+start_epochs = 40
+n_critic = 5  # Количество шагов для дискриминатора перед обновлением генератора
+lr = 0.1  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
 
 # Инициализация моделей
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator.load_state_dict(torch.load('model/ver-2.1/generator_epoch_10.pth'))
-discriminator.load_state_dict(torch.load('model/ver-2.1/discriminator_epoch_10.pth'))
+generator_path = 'model/ver-3/generator_epoch_40.pth'
+discriminator_path = 'model/ver-3/discriminator_epoch_40.pth'
+
+generator.load_state_dict(torch.load(generator_path, weights_only=True))
+discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
 
 # Оптимизаторы
 optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
 
-# Шедулеры
-# scheduler_G = StepLR(optimizer_G, step_size=10, gamma=0.5)
-# scheduler_D = StepLR(optimizer_D, step_size=10, gamma=0.5)
+# Шедулеры ReduceLROnPlateau
+scheduler_G = ReduceLROnPlateau(optimizer_G, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6)
+scheduler_D = ReduceLROnPlateau(optimizer_D, mode='min', factor=0.5, patience=5, verbose=True, min_lr=1e-6)
 
 # Папка для сохранения изображений
 os.makedirs('generated_images', exist_ok=True)
@@ -250,6 +256,9 @@ def smooth_labels(labels, smoothing=0.1):
 
 # Обучение
 for epoch in range(start_epochs, num_epochs):
+    generator.train()
+    discriminator.train()
+
     for i, (real_images, conditions) in enumerate(dataloader):
         real_images = real_images.to(device)
         conditions = conditions.to(device)
@@ -282,23 +291,28 @@ for epoch in range(start_epochs, num_epochs):
         # Обучение генератора
         optimizer_G.zero_grad()
 
-        # Переопределение для генератора
+        # Генерация фейковых изображений
         fake_images = generator(z, conditions)
         fake_validity = discriminator(fake_images, conditions)
         g_loss = -torch.mean(fake_validity)  # Потеря для генератора
         g_loss.backward()
         optimizer_G.step()
 
-    # Обновление шедулеров
-    # scheduler_G.step()
-    # scheduler_D.step()
+    # Обновление шедулеров на основе потерь
+    scheduler_G.step(g_loss)
+    scheduler_D.step(d_loss)
 
-    print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
+    # Получение текущих значений скорости обучения
+    lr_G = optimizer_G.param_groups[0]['lr']
+    lr_D = optimizer_D.param_groups[0]['lr']
+
+    print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
 
     # Сохранение моделей каждые 10 эпох
     if (epoch + 1) % 10 == 0:
-        torch.save(generator.state_dict(), f'generator_epoch_{epoch + 1}.pth')
-        torch.save(discriminator.state_dict(), f'discriminator_epoch_{epoch + 1}.pth')
+        torch.save(generator.state_dict(), f'model/ver-2.1/generator_epoch_{epoch + 1}.pth')
+        torch.save(discriminator.state_dict(), f'model/ver-2.1/discriminator_epoch_{epoch + 1}.pth')
+        print(f"Модели сохранены за эпоху {epoch + 1}.")
 
         # Сохранение сгенерированных изображений
         with torch.no_grad():
@@ -308,7 +322,7 @@ for epoch in range(start_epochs, num_epochs):
             generated_images = (generated_images + 1) / 2  # Приводим значения к диапазону [0, 1]
 
             for j in range(generated_images.size(0)):
-                img = transforms.ToPILImage()(generated_images[j])  # Преобразуем тензор в изображение
+                img = transforms.ToPILImage()(generated_images[j].cpu())  # Преобразуем тензор в изображение
                 img.save(f'generated_images/image_epoch_{epoch + 1}_img_{j + 1}.png')  # Сохраняем изображение
 
 print("Обучение завершено!")
