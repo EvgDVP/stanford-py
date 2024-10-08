@@ -4,6 +4,7 @@ from io import BytesIO
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 import pandas as pd
@@ -218,7 +219,8 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 100
-n_critic = 3  # Количество шагов для дискриминатора перед обновлением генератора
+start_epochs = 10
+n_critic = 4  # Количество шагов для дискриминатора перед обновлением генератора
 lr = 0.0001  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
 
@@ -226,9 +228,16 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
+generator.load_state_dict(torch.load('model/ver-2.1/generator_epoch_10.pth'))
+discriminator.load_state_dict(torch.load('model/ver-2.1/discriminator_epoch_10.pth'))
+
 # Оптимизаторы
 optimizer_G = optim.Adam(generator.parameters(), lr=lr, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=lr, betas=(0.5, 0.999))
+
+# Шедулеры
+# scheduler_G = StepLR(optimizer_G, step_size=10, gamma=0.5)
+# scheduler_D = StepLR(optimizer_D, step_size=10, gamma=0.5)
 
 # Папка для сохранения изображений
 os.makedirs('generated_images', exist_ok=True)
@@ -240,7 +249,7 @@ def smooth_labels(labels, smoothing=0.1):
 
 
 # Обучение
-for epoch in range(num_epochs):
+for epoch in range(start_epochs, num_epochs):
     for i, (real_images, conditions) in enumerate(dataloader):
         real_images = real_images.to(device)
         conditions = conditions.to(device)
@@ -279,6 +288,10 @@ for epoch in range(num_epochs):
         g_loss = -torch.mean(fake_validity)  # Потеря для генератора
         g_loss.backward()
         optimizer_G.step()
+
+    # Обновление шедулеров
+    # scheduler_G.step()
+    # scheduler_D.step()
 
     print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
 
