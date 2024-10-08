@@ -88,63 +88,37 @@ class Generator(nn.Module):
 
         self.conv_blocks = nn.Sequential(
             # 4x4 -> 8x8
-            nn.ConvTranspose2d(1024, 1024, 4, 2, 1),  # Увеличиваем разрешение
-            nn.BatchNorm2d(1024),
-            nn.ReLU(True),
-            nn.Conv2d(1024, 1024, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(1024),
+            nn.ConvTranspose2d(1024, 512, 4, 2, 1),  # Увеличиваем разрешение
+            nn.BatchNorm2d(512),
             nn.ReLU(True),
 
             # 8x8 -> 16x16
-            nn.ConvTranspose2d(1024, 512, 4, 2, 1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-            nn.Conv2d(512, 512, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-
-            # 16x16 -> 32x32
             nn.ConvTranspose2d(512, 256, 4, 2, 1),
             nn.BatchNorm2d(256),
             nn.ReLU(True),
-            nn.Conv2d(256, 256, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(256),
-            nn.ReLU(True),
 
-            # 32x32 -> 64x64
+            # 16x16 -> 32x32
             nn.ConvTranspose2d(256, 128, 4, 2, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(True),
-            nn.Conv2d(128, 128, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(128),
-            nn.ReLU(True),
 
-            # 64x64 -> 128x128
+            # 32x32 -> 64x64
             nn.ConvTranspose2d(128, 64, 4, 2, 1),
             nn.BatchNorm2d(64),
             nn.ReLU(True),
-            nn.Conv2d(64, 64, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(64),
-            nn.ReLU(True),
 
-            # 128x128 -> 256x256
+            # 64x64 -> 128x128
             nn.ConvTranspose2d(64, 32, 4, 2, 1),
             nn.BatchNorm2d(32),
             nn.ReLU(True),
-            nn.Conv2d(32, 32, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(32),
-            nn.ReLU(True),
 
-            # 256x256 -> 512x512
+            # 128x128 -> 256x256
             nn.ConvTranspose2d(32, 16, 4, 2, 1),
             nn.BatchNorm2d(16),
             nn.ReLU(True),
-            nn.Conv2d(16, 16, 3, padding=1),  # Дополнительная свёртка
-            nn.BatchNorm2d(16),
-            nn.ReLU(True),
 
-            # Последний слой: 512x512
-            nn.ConvTranspose2d(16, 3, 4, 2, 1),
+            # 256x256 -> 512x512
+            nn.ConvTranspose2d(16, 3, 4, 2, 1),  # Теперь здесь будет выход 512x512
             nn.Tanh()  # Для нормализации значений пикселей в диапазоне от -1 до 1
         )
 
@@ -219,9 +193,6 @@ class Discriminator(nn.Module):
         return validity
 
 def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
-    print("Размер реальных изображений:", real_samples.shape)  # добавьте это
-    print("Размер фейковых изображений:", fake_samples.shape)  # добавьте это
-
     batch_size = real_samples.shape[0]
     alpha = torch.rand(batch_size, 1, 1, 1).expand_as(real_samples).to(real_samples.device)
     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
