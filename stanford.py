@@ -172,20 +172,24 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(16),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(16, 32, 4, 2, 1),  # 128x128 -> 64x64
+            nn.Conv2d(16, 32, 4, 2, 1),  # 256x256 -> 128x128
             nn.BatchNorm2d(32),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(32, 64, 4, 2, 1),  # 64x64 -> 32x32
+            nn.Conv2d(32, 64, 4, 2, 1),  # 128x128 -> 64x64
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, 4, 2, 1),  # 32x32 -> 16x16
+            nn.Conv2d(64, 128, 4, 2, 1),  # 64x64 -> 32x32
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(128, 256, 4, 2, 1),  # 16x16 -> 8x8
+            nn.Conv2d(128, 256, 4, 2, 1),  # 32x32 -> 16x16
             nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(256, 512, 4, 2, 1),  # 16x16 -> 8x8
+            nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
