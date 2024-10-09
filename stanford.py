@@ -325,14 +325,14 @@ for epoch in range(start_epochs, num_epochs):
     print(f"Epoch [{epoch}/{num_epochs}], D Loss: {average_d_loss:.4f}, G Loss: {average_g_loss:.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
 
     # Адаптивное изменение шагов дискриминатора
-    if average_d_loss < average_g_loss - adjustment_threshold:
-        # Генератор слишком доминирует, увеличиваем шаги дискриминатора
-        n_critic += step_increase
-        print(f"Увеличиваем n_critic: {n_critic}")
-    elif average_g_loss < average_d_loss - adjustment_threshold and n_critic > 1:
-        # Дискриминатор слишком доминирует, уменьшаем шаги дискриминатора
+    if abs(average_d_loss) > average_g_loss + adjustment_threshold and n_critic > 1:
+        # Дискриминатор слишком доминирует (его потери по абсолютной величине больше)
         n_critic -= step_increase
         print(f"Уменьшаем n_critic: {n_critic}")
+    elif average_g_loss > abs(average_d_loss) + adjustment_threshold:
+        # Генератор слишком доминирует
+        n_critic += step_increase
+        print(f"Увеличиваем n_critic: {n_critic}")
 
     # Сохранение моделей каждые 10 эпох
     if (epoch + 1) % 10 == 0:
