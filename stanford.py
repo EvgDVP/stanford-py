@@ -217,13 +217,12 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     gradient_penalty = ((gradients.view(gradients.size(0), -1).norm(2, dim=1) - 1) ** 2).mean()  # L2-норма
     return gradient_penalty
 
-
 # Установка параметров для обучения
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 200
 start_epochs = 50
-n_critic = 4  # Количество шагов для дискриминатора перед обновлением генератора
+n_critic = 6  # Начальное количество шагов для дискриминатора перед обновлением генератора
 lr = 0.0001  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
 
@@ -248,20 +247,29 @@ scheduler_D = ReduceLROnPlateau(optimizer_D, mode='min', factor=0.5, patience=5,
 # Папка для сохранения изображений
 os.makedirs('generated_images', exist_ok=True)
 
+# Адаптивные параметры
+average_d_loss = 0
+average_g_loss = 0
+adjustment_threshold = 5  # Порог, через который будем изменять шаги
+step_increase = 1  # Насколько увеличивать шаги при необходимости
 
 # Функция для label smoothing (применяется только к реальным меткам)
 def smooth_labels(labels, smoothing=0.1):
     return labels - smoothing
-
 
 # Обучение
 for epoch in range(start_epochs, num_epochs):
     generator.train()
     discriminator.train()
 
+    total_d_loss = 0
+    total_g_loss = 0
+    batch_count = 0
+
     for i, (real_images, conditions) in enumerate(dataloader):
         real_images = real_images.to(device)
         conditions = conditions.to(device)
+        batch_count += 1
 
         # Обучение дискриминатора
         for _ in range(n_critic):
@@ -288,6 +296,8 @@ for epoch in range(start_epochs, num_epochs):
             d_loss.backward()  # Потеря для дискриминатора
             optimizer_D.step()
 
+            total_d_loss += d_loss.item()
+
         # Обучение генератора
         optimizer_G.zero_grad()
 
@@ -298,6 +308,8 @@ for epoch in range(start_epochs, num_epochs):
         g_loss.backward()
         optimizer_G.step()
 
+        total_g_loss += g_loss.item()
+
     # Обновление шедулеров на основе потерь
     scheduler_G.step(g_loss)
     scheduler_D.step(d_loss)
@@ -306,7 +318,21 @@ for epoch in range(start_epochs, num_epochs):
     lr_G = optimizer_G.param_groups[0]['lr']
     lr_D = optimizer_D.param_groups[0]['lr']
 
-    print(f"Epoch [{epoch}/{num_epochs}], D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
+    # Средние потери за эпоху
+    average_d_loss = total_d_loss / batch_count
+    average_g_loss = total_g_loss / batch_count
+
+    print(f"Epoch [{epoch}/{num_epochs}], D Loss: {average_d_loss:.4f}, G Loss: {average_g_loss:.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
+
+    # Адаптивное изменение шагов дискриминатора
+    if average_d_loss < average_g_loss - adjustment_threshold:
+        # Генератор слишком доминирует, увеличиваем шаги дискриминатора
+        n_critic += step_increase
+        print(f"Увеличиваем n_critic: {n_critic}")
+    elif average_g_loss < average_d_loss - adjustment_threshold and n_critic > 1:
+        # Дискриминатор слишком доминирует, уменьшаем шаги дискриминатора
+        n_critic -= step_increase
+        print(f"Уменьшаем n_critic: {n_critic}")
 
     # Сохранение моделей каждые 10 эпох
     if (epoch + 1) % 10 == 0:
