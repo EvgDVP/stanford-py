@@ -221,7 +221,7 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 200
-start_epochs = 120
+start_epochs = 130
 n_critic = 1  # Начальное количество шагов для дискриминатора перед обновлением генератора
 lr_Gen = 0.0001  # Начальная скорость обучения генератора
 lr_Dis = 0.000025  # Начальная скорость обучения дискриминатора
@@ -231,8 +231,8 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_120.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_120.pth'
+generator_path = 'model/ver-3/generator_epoch_130.pth'
+discriminator_path = 'model/ver-3/discriminator_epoch_130.pth'
 
 generator.load_state_dict(torch.load(generator_path, weights_only=True))
 discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
@@ -242,8 +242,8 @@ optimizer_G = optim.Adam(generator.parameters(), lr=lr_Gen, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=lr_Dis, betas=(0.5, 0.999))
 
 # Шедулеры ReduceLROnPlateau
-scheduler_G = ReduceLROnPlateau(optimizer_G, mode='min', factor=0.5, patience=5, min_lr=1e-6)
-scheduler_D = ReduceLROnPlateau(optimizer_D, mode='min', factor=0.5, patience=5, min_lr=1e-6)
+# scheduler_G = ReduceLROnPlateau(optimizer_G, mode='min', factor=0.5, patience=5, min_lr=1e-6)
+# scheduler_D = ReduceLROnPlateau(optimizer_D, mode='min', factor=0.5, patience=5, min_lr=1e-6)
 
 # Папка для сохранения изображений
 os.makedirs('generated_images', exist_ok=True)
@@ -312,8 +312,8 @@ for epoch in range(start_epochs, num_epochs):
         total_g_loss += g_loss.item()
 
     # Обновление шедулеров на основе потерь
-    scheduler_G.step(g_loss)
-    scheduler_D.step(d_loss)
+    # scheduler_G.step(g_loss)
+    # scheduler_D.step(d_loss)
 
     # Получение текущих значений скорости обучения
     lr_G = optimizer_G.param_groups[0]['lr']
