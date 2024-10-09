@@ -222,8 +222,8 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 200
-start_epochs = 40
-n_critic = 5  # Количество шагов для дискриминатора перед обновлением генератора
+start_epochs = 50
+n_critic = 4  # Количество шагов для дискриминатора перед обновлением генератора
 lr = 0.0001  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
 
@@ -231,8 +231,8 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_40.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_40.pth'
+generator_path = 'model/ver-3/generator_epoch_50.pth'
+discriminator_path = 'model/ver-3/discriminator_epoch_50.pth'
 
 generator.load_state_dict(torch.load(generator_path, weights_only=True))
 discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
