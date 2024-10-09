@@ -221,7 +221,7 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 200
-start_epochs = 50
+start_epochs = 80
 n_critic = 2  # Начальное количество шагов для дискриминатора перед обновлением генератора
 lr = 0.0001  # Начальная скорость обучения
 weight_clip = 0.01  # Объектная функция для WGAN
@@ -230,8 +230,8 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_50.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_50.pth'
+generator_path = 'model/ver-3/generator_epoch_80.pth'
+discriminator_path = 'model/ver-3/discriminator_epoch_80.pth'
 
 generator.load_state_dict(torch.load(generator_path, weights_only=True))
 discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
@@ -250,7 +250,7 @@ os.makedirs('generated_images', exist_ok=True)
 # Адаптивные параметры
 average_d_loss = 0
 average_g_loss = 0
-adjustment_threshold = 5  # Порог, через который будем изменять шаги
+adjustment_threshold = 15  # Порог, через который будем изменять шаги
 step_increase = 1  # Насколько увеличивать шаги при необходимости
 
 # Функция для label smoothing (применяется только к реальным меткам)
@@ -324,15 +324,15 @@ for epoch in range(start_epochs, num_epochs):
 
     print(f"Epoch [{epoch}/{num_epochs}], D Loss: {average_d_loss:.4f}, G Loss: {average_g_loss:.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
 
-    # Адаптивное изменение шагов дискриминатора
-    if abs(average_d_loss) > average_g_loss + adjustment_threshold and n_critic > 1:
-        # Дискриминатор слишком доминирует (его потери по абсолютной величине больше)
-        n_critic -= step_increase
-        print(f"Уменьшаем n_critic: {n_critic}")
-    elif average_g_loss > abs(average_d_loss) + adjustment_threshold:
-        # Генератор слишком доминирует
-        n_critic += step_increase
-        print(f"Увеличиваем n_critic: {n_critic}")
+    # # Адаптивное изменение шагов дискриминатора
+    # if abs(average_d_loss) > average_g_loss + adjustment_threshold and n_critic > 1:
+    #     # Дискриминатор слишком доминирует (его потери по абсолютной величине больше)
+    #     n_critic -= step_increase
+    #     print(f"Уменьшаем n_critic: {n_critic}")
+    # elif average_g_loss > abs(average_d_loss) + adjustment_threshold:
+    #     # Генератор слишком доминирует
+    #     n_critic += step_increase
+    #     print(f"Увеличиваем n_critic: {n_critic}")
 
     # Сохранение моделей каждые 10 эпох
     if (epoch + 1) % 10 == 0:
