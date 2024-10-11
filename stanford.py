@@ -52,7 +52,7 @@ class PalmDataset(Dataset):
         # Преобразование меток в числовой формат
         label = torch.tensor([age, skin_color_label, accessories], dtype=torch.float32)
 
-        return img, label
+        return img, label, img_name
 
 class Generator(nn.Module):
     def __init__(self, latent_dim, condition_dim):
@@ -227,7 +227,8 @@ def smooth_labels(labels, smoothing=0.1):
 generator.train()
 discriminator.train()
 
-for i, (real_images, conditions) in enumerate(dataloader):
+for i, (real_images, conditions, file_names) in enumerate(dataloader):
+    print(f"Имя файла: {file_names[0]}")
     real_images = real_images.to(device)
     conditions = conditions.to(device)
     save_input_image(real_images, i)
