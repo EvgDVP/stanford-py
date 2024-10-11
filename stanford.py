@@ -4,7 +4,6 @@ from io import BytesIO
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 import pandas as pd
@@ -13,7 +12,6 @@ from torchvision import transforms
 # Определение устройства (GPU или CPU)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Используемое устройство: {device}")
-
 
 class PalmDataset(Dataset):
     def __init__(self, csv_file, zip_file, transform=None):
@@ -55,30 +53,6 @@ class PalmDataset(Dataset):
         label = torch.tensor([age, skin_color_label, accessories], dtype=torch.float32)
 
         return img, label
-
-
-# Путь к CSV файлу с метками и путь к ZIP-файлу с изображениями
-csv_file = 'content/dataset/HandInfo.csv'
-zip_file = 'content/dataset/images/Hands.zip'
-
-df = pd.read_csv(csv_file)
-print(f"Столбцы CSV файла: {df.columns}")
-
-# Определяем преобразования для изображений
-transform = transforms.Compose([
-    transforms.Resize((512, 512)),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomApply([transforms.RandomRotation(5, fill=(255, 255, 255))], p=0.3),
-    transforms.ToTensor(),
-    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-])
-
-# Создаем датасет с использованием класса PalmDataset
-dataset = PalmDataset(csv_file=csv_file, zip_file=zip_file, transform=transform)
-
-# Создаем DataLoader
-dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
-
 
 class Generator(nn.Module):
     def __init__(self, latent_dim, condition_dim):
@@ -197,161 +171,108 @@ class Discriminator(nn.Module):
 
         return validity
 
+# Путь к CSV файлу с метками и путь к ZIP-файлу с изображениями
+csv_file = 'content/dataset/HandInfo.csv'
+zip_file = 'content/dataset/images/Hands.zip'
 
-def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditions):
-    batch_size = real_samples.shape[0]
-    alpha = torch.rand(batch_size, 1, 1, 1).expand_as(real_samples).to(real_samples.device)
-    interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+df = pd.read_csv(csv_file)
+print(f"Столбцы CSV файла: {df.columns}")
 
-    d_interpolates = discriminator(interpolates, conditions)
-    fake = torch.ones(real_samples.shape[0], 1).to(real_samples.device)  # Признак для реальных изображений
+# Определяем преобразования для изображений
+transform = transforms.Compose([
+    transforms.Resize((512, 512)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomApply([transforms.RandomRotation(5, fill=(255, 255, 255))], p=0.3),
+    transforms.ToTensor(),
+    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+])
 
-    # Указываем retain_graph=True для возможности обратного распространения
-    gradients = torch.autograd.grad(
-        outputs=d_interpolates,
-        inputs=interpolates,
-        grad_outputs=fake,
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True,
-    )[0]
+# Создаем датасет с использованием класса PalmDataset
+dataset = PalmDataset(csv_file=csv_file, zip_file=zip_file, transform=transform)
 
-    gradient_penalty = ((gradients.view(gradients.size(0), -1).norm(2, dim=1) - 1) ** 2).mean()  # L2-норма
-    return gradient_penalty
+# Создаем DataLoader
+dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-# Установка параметров для обучения
-latent_dim = 1024  # Размер латентного пространства
-condition_dim = 3  # Размерность условных данных
-num_epochs = 400
-start_epochs = 290
-n_critic = 1  # Начальное количество шагов для дискриминатора перед обновлением генератора
-lr_Gen = 0.00005  # Начальная скорость обучения генератора
-lr_Dis = 0.0001  # Начальная скорость обучения дискриминатора
-weight_clip = 0.01  # Объектная функция для WGAN
+os.makedirs('input_images', exist_ok=True)
+os.makedirs('generated_images', exist_ok=True)
 
 # Инициализация моделей
+latent_dim = 1024  # Размер латентного пространства
+condition_dim = 3  # Размерность условных данных
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_290.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_290.pth'
-
-generator.load_state_dict(torch.load(generator_path, weights_only=True))
-discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
-
 # Оптимизаторы
-optimizer_G = optim.Adam(generator.parameters(), lr=lr_Gen, betas=(0.5, 0.999))
-optimizer_D = optim.Adam(discriminator.parameters(), lr=lr_Dis, betas=(0.5, 0.999))
+optimizer_G = optim.Adam(generator.parameters(), lr=0.0001, betas=(0.5, 0.999))
+optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
 
-# Шедулеры ReduceLROnPlateau
-# scheduler_G = ReduceLROnPlateau(optimizer_G, mode='min', factor=0.5, patience=5, min_lr=1e-6)
-# scheduler_D = ReduceLROnPlateau(optimizer_D, mode='min', factor=0.5, patience=5, min_lr=1e-6)
+def save_input_image(tensor, img_idx):
+    """Сохраняет входное изображение в формате PNG."""
+    img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
+    img.save(f'input_images/input_image_{img_idx}.png')
+    print(f'Входное изображение сохранено как input_images/input_image_{img_idx}.png')
 
-# Папка для сохранения изображений
-os.makedirs('generated_images', exist_ok=True)
-
-# Адаптивные параметры
-average_d_loss = 0
-average_g_loss = 0
-adjustment_threshold = 15  # Порог, через который будем изменять шаги
-step_increase = 1  # Насколько увеличивать шаги при необходимости
+def save_generated_image(tensor, img_idx):
+    """Сохраняет сгенерированное изображение в формате PNG."""
+    tensor = (tensor + 1) / 2  # Переводим значения в диапазон [0, 1]
+    img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
+    img.save(f'generated_images/generated_image_{img_idx}.png')
+    print(f'Сгенерированное изображение сохранено как generated_images/generated_image_{img_idx}.png')
 
 # Функция для label smoothing (применяется только к реальным меткам)
 def smooth_labels(labels, smoothing=0.1):
     return labels - smoothing
 
-# Обучение
-for epoch in range(start_epochs, num_epochs):
-    generator.train()
-    discriminator.train()
+# Проводим обучение на одном батче
+generator.train()
+discriminator.train()
 
-    total_d_loss = 0
-    total_g_loss = 0
-    batch_count = 0
+for i, (real_images, conditions) in enumerate(dataloader):
+    real_images = real_images.to(device)
+    conditions = conditions.to(device)
+    save_input_image(real_images, i)
 
-    for i, (real_images, conditions) in enumerate(dataloader):
-        real_images = real_images.to(device)
-        conditions = conditions.to(device)
-        batch_count += 1
+    # Выводим входные изображения и метки
+    print(f"Входное изображение (тензор): {real_images}")
+    print(f"Метки (тензор): {conditions}")
 
-        # Обучение дискриминатора
-        for _ in range(n_critic):
-            optimizer_D.zero_grad()
+    # Обучение дискриминатора
+    optimizer_D.zero_grad()
 
-            # Генерация случайного латентного вектора
-            z = torch.randn(real_images.size(0), latent_dim).to(device)
+    # Генерация случайного латентного вектора
+    z = torch.randn(real_images.size(0), latent_dim).to(device)
 
-            # Генерация фейковых изображений
-            fake_images = generator(z, conditions)
+    # Генерация фейковых изображений
+    fake_images = generator(z, conditions)
 
-            # Валидность для дискриминатора
-            real_validity = discriminator(real_images, conditions)
-            fake_validity = discriminator(fake_images.detach(), conditions)
+    # Выводим фейковые изображения
+    print(f"Сгенерированные изображения (тензор): {fake_images}")
 
-            # Применяем label smoothing к реальной валидности
-            real_validity_smoothed = smooth_labels(real_validity, smoothing=0.1)
+    # Валидность для дискриминатора
+    real_validity = discriminator(real_images, conditions)
+    fake_validity = discriminator(fake_images.detach(), conditions)
 
-            # Расчет градиентной штрафной функции
-            gradient_penalty = compute_gradient_penalty(discriminator, real_images, fake_images, conditions)
+    # Применяем label smoothing к реальной валидности
+    real_validity_smoothed = smooth_labels(real_validity, smoothing=0.1)
 
-            # Потеря для дискриминатора с учетом label smoothing
-            d_loss = -torch.mean(real_validity_smoothed) + torch.mean(fake_validity) + 100 * gradient_penalty
-            d_loss.backward()  # Потеря для дискриминатора
-            optimizer_D.step()
+    # Расчет потерь дискриминатора
+    d_loss = -torch.mean(real_validity_smoothed) + torch.mean(fake_validity)
+    d_loss.backward()  # Потеря для дискриминатора
+    optimizer_D.step()
 
-            total_d_loss += d_loss.item()
+    # Обучение генератора
+    optimizer_G.zero_grad()
 
-        # Обучение генератора
-        optimizer_G.zero_grad()
+    # Генерация фейковых изображений
+    fake_images = generator(z, conditions)
+    save_generated_image(fake_images, i)
+    fake_validity = discriminator(fake_images, conditions)
+    g_loss = -torch.mean(fake_validity)  # Потеря для генератора
+    g_loss.backward()
+    optimizer_G.step()
 
-        # Генерация фейковых изображений
-        fake_images = generator(z, conditions)
-        fake_validity = discriminator(fake_images, conditions)
-        g_loss = -torch.mean(fake_validity)  # Потеря для генератора
-        g_loss.backward()
-        optimizer_G.step()
+    print(f"D Loss: {d_loss.item():.4f}, G Loss: {g_loss.item():.4f}")
 
-        total_g_loss += g_loss.item()
+    # Останавливаем после одного батча
+    break
 
-    # Обновление шедулеров на основе потерь
-    # scheduler_G.step(g_loss)
-    # scheduler_D.step(d_loss)
-
-    # Получение текущих значений скорости обучения
-    lr_G = optimizer_G.param_groups[0]['lr']
-    lr_D = optimizer_D.param_groups[0]['lr']
-
-    # Средние потери за эпоху
-    average_d_loss = total_d_loss / batch_count
-    average_g_loss = total_g_loss / batch_count
-
-    print(f"Epoch [{epoch}/{num_epochs}], D Loss: {average_d_loss:.4f}, G Loss: {average_g_loss:.4f}, LR G: {lr_G:.6f}, LR D: {lr_D:.6f}")
-
-    # # Адаптивное изменение шагов дискриминатора
-    # if abs(average_d_loss) > average_g_loss + adjustment_threshold and n_critic > 1:
-    #     # Дискриминатор слишком доминирует (его потери по абсолютной величине больше)
-    #     n_critic -= step_increase
-    #     print(f"Уменьшаем n_critic: {n_critic}")
-    # elif average_g_loss > abs(average_d_loss) + adjustment_threshold:
-    #     # Генератор слишком доминирует
-    #     n_critic += step_increase
-    #     print(f"Увеличиваем n_critic: {n_critic}")
-
-    # Сохранение моделей каждые 10 эпох
-    if (epoch + 1) % 10 == 0:
-        torch.save(generator.state_dict(), f'model/ver-2.1/generator_epoch_{epoch + 1}.pth')
-        torch.save(discriminator.state_dict(), f'model/ver-2.1/discriminator_epoch_{epoch + 1}.pth')
-        print(f"Модели сохранены за эпоху {epoch + 1}.")
-
-        # Сохранение сгенерированных изображений
-        with torch.no_grad():
-            z = torch.randn(16, latent_dim).to(device)  # Генерируем 16 случайных латентных векторов
-            sample_conditions = conditions[:16]  # Берем условия из батча
-            generated_images = generator(z, sample_conditions)  # Генерируем изображения
-            generated_images = (generated_images + 1) / 2  # Приводим значения к диапазону [0, 1]
-
-            for j in range(generated_images.size(0)):
-                img = transforms.ToPILImage()(generated_images[j].cpu())  # Преобразуем тензор в изображение
-                img.save(f'generated_images/image_epoch_{epoch + 1}_img_{j + 1}.png')  # Сохраняем изображение
-
-print("Обучение завершено!")
