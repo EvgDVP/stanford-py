@@ -219,12 +219,15 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     return gradient_penalty
 
 def save_input_image(tensor, img_idx):
+    tensor = (tensor + 1) / 2
+
     for i in range(tensor.size(0)):
-        img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
+        img = transforms.ToPILImage()(tensor[i].cpu())
         img.save(f'generated_images/input_image_batch_{img_idx}_img_{i}.png')
 
 def save_generated_image(tensor, img_idx):
     tensor = (tensor + 1) / 2  # Переводим значения в диапазон [0, 1]
+    
     for i in range(tensor.size(0)):
         img = transforms.ToPILImage()(tensor[i].cpu())
         img.save(f'generated_images/test_generated_image_{img_idx}_img_{i}.png')
