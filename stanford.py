@@ -68,7 +68,7 @@ print(f"Столбцы CSV файла: {df.columns}")
 transform = transforms.Compose([
     transforms.Resize((512, 512)),  # Изменение размера изображения до 512x512
     transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(10),
+    transforms.RandomRotation(5),
     transforms.ToTensor(),  # Преобразование изображения в тензор
     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # Нормализация
 ])
@@ -223,9 +223,9 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
 latent_dim = 1024  # Размер латентного пространства
 condition_dim = 3  # Размерность условных данных
 num_epochs = 400
-start_epochs = 270
-n_critic = 5  # Начальное количество шагов для дискриминатора перед обновлением генератора
-lr_Gen = 0.00001  # Начальная скорость обучения генератора
+start_epochs = 290
+n_critic = 1  # Начальное количество шагов для дискриминатора перед обновлением генератора
+lr_Gen = 0.00005  # Начальная скорость обучения генератора
 lr_Dis = 0.0001  # Начальная скорость обучения дискриминатора
 weight_clip = 0.01  # Объектная функция для WGAN
 
@@ -233,8 +233,8 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_270.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_270.pth'
+generator_path = 'model/ver-3/generator_epoch_290.pth'
+discriminator_path = 'model/ver-3/discriminator_epoch_290.pth'
 
 generator.load_state_dict(torch.load(generator_path, weights_only=True))
 discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
