@@ -70,7 +70,6 @@ transform = transforms.Compose([
     transforms.Pad(10, fill=(255, 255, 255)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomApply([transforms.RandomRotation(5, fill=(255, 255, 255))], p=0.3),
-    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
 ])
