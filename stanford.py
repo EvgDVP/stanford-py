@@ -227,7 +227,7 @@ def save_input_image(tensor, img_idx):
 
 def save_generated_image(tensor, img_idx):
     tensor = (tensor + 1) / 2  # Переводим значения в диапазон [0, 1]
-    
+
     for i in range(tensor.size(0)):
         img = transforms.ToPILImage()(tensor[i].cpu())
         img.save(f'generated_images/test_generated_image_{img_idx}_img_{i}.png')
@@ -279,7 +279,7 @@ for epoch in range(start_epochs, num_epochs):
     for i, (real_images, conditions) in enumerate(dataloader):
         real_images = real_images.to(device)
         conditions = conditions.to(device)
-        save_input_image(real_images, i)
+        #save_input_image(real_images, i)
         batch_count += 1
 
         # Обучение дискриминатора
@@ -314,7 +314,7 @@ for epoch in range(start_epochs, num_epochs):
 
         # Генерация фейковых изображений
         fake_images = generator(z, conditions)
-        save_generated_image(fake_images, i)
+        #save_generated_image(fake_images, i)
         fake_validity = discriminator(fake_images, conditions)
         g_loss = -torch.mean(fake_validity)  # Потеря для генератора
         g_loss.backward()
