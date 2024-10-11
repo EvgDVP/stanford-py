@@ -66,11 +66,13 @@ print(f"Столбцы CSV файла: {df.columns}")
 
 # Определяем преобразования для изображений
 transform = transforms.Compose([
-    transforms.Resize((512, 512)),  # Изменение размера изображения до 512x512
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(5),
-    transforms.ToTensor(),  # Преобразование изображения в тензор
-    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])  # Нормализация
+    transforms.Resize((512, 512)),
+    transforms.Pad(10, fill=(255, 255, 255)),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomApply([transforms.RandomRotation(5, fill=(255, 255, 255))], p=0.3),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
 ])
 
 # Создаем датасет с использованием класса PalmDataset
