@@ -67,7 +67,6 @@ print(f"Столбцы CSV файла: {df.columns}")
 # Определяем преобразования для изображений
 transform = transforms.Compose([
     transforms.Resize((512, 512)),
-    transforms.Pad(10, fill=(255, 255, 255)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomApply([transforms.RandomRotation(5, fill=(255, 255, 255))], p=0.3),
     transforms.ToTensor(),
