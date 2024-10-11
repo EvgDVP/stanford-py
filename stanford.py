@@ -261,11 +261,11 @@ weight_clip = 0.01  # Объектная функция для WGAN
 generator = Generator(latent_dim, condition_dim).to(device)
 discriminator = Discriminator(condition_dim).to(device)
 
-generator_path = 'model/ver-3/generator_epoch_270.pth'
-discriminator_path = 'model/ver-3/discriminator_epoch_270.pth'
+#generator_path = 'model/ver-3/generator_epoch_270.pth'
+#discriminator_path = 'model/ver-3/discriminator_epoch_270.pth'
 
-generator.load_state_dict(torch.load(generator_path, weights_only=True))
-discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
+#generator.load_state_dict(torch.load(generator_path, weights_only=True))
+#discriminator.load_state_dict(torch.load(discriminator_path, weights_only=True))
 
 # Оптимизаторы
 optimizer_G = optim.Adam(generator.parameters(), lr=lr_Gen, betas=(0.5, 0.999))
