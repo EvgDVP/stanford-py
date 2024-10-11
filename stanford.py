@@ -219,17 +219,15 @@ def compute_gradient_penalty(discriminator, real_samples, fake_samples, conditio
     return gradient_penalty
 
 def save_input_image(tensor, img_idx):
-    """Сохраняет входное изображение в формате PNG."""
-    img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
-    img.save(f'input_images/input_image_{img_idx}.png')
-    print(f'Входное изображение сохранено как input_images/input_image_{img_idx}.png')
+    for i in range(tensor.size(0)):
+        img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
+        img.save(f'generated_images/input_image_batch_{img_idx}_img_{i}.png')
 
 def save_generated_image(tensor, img_idx):
-    """Сохраняет сгенерированное изображение в формате PNG."""
     tensor = (tensor + 1) / 2  # Переводим значения в диапазон [0, 1]
-    img = transforms.ToPILImage()(tensor.cpu().squeeze(0))
-    img.save(f'generated_images/test_generated_image_{img_idx}.png')
-    print(f'Сгенерированное изображение сохранено как generated_images/generated_image_{img_idx}.png')
+    for i in range(tensor.size(0)):
+        img = transforms.ToPILImage()(tensor[i].cpu())
+        img.save(f'generated_images/test_generated_image_{img_idx}_img_{i}.png')
 
 # Установка параметров для обучения
 latent_dim = 1024  # Размер латентного пространства
